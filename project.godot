@@ -11,9 +11,17 @@ config_version=5
 [application]
 
 config/name="mvp-06"
-run/main_scene="uid://77dq7u07cb4"
+run/main_scene="uid://d4c3muf0ks7vq"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=480
+window/size/viewport_height=854
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation="portrait"
 
 [editor_plugins]
 
