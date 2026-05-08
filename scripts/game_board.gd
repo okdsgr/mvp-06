@@ -1,6 +1,6 @@
 ## game_board.gd
 ## 盤面描画・入力・UI（ボタン・勝利演出）を担当。
-## デザインはThemeConfigから取得。ロジックはGameLogicに委譲。
+## オンライン対戦・ローカル対戦の両方に対応。
 
 extends Node2D
 
@@ -12,9 +12,13 @@ var _default_font: Font
 var _win_alpha: float = 0.0
 var _win_tween: Tween = null
 
-# UIボタン（CanvasLayer経由）
+# UIボタン
 var _restart_btn: Button
 var _undo_btn: Button
+
+# オンライン対戦
+var online_mode: bool = false
+var my_player: int = GameLogic.PLAYER_ONE  # 自分が1か2か
 
 func _ready() -> void:
 	_default_font = ThemeDB.fallback_font
@@ -23,6 +27,13 @@ func _ready() -> void:
 	_setup_ui()
 	queue_redraw()
 	get_tree().get_root().size_changed.connect(_on_viewport_resized)
+
+	# オンラインモードかどうか確認
+	if NetworkManager.state == NetworkManager.MatchState.IN_MATCH:
+		online_mode = true
+		my_player   = GameLogic.PLAYER_ONE if NetworkManager.is_host else GameLogic.PLAYER_TWO
+		NetworkManager.game_state_updated.connect(_on_network_state_updated)
+		print("Online mode: my_player=", my_player)
 
 func _on_viewport_resized() -> void:
 	_update_board_rect()
@@ -109,12 +120,16 @@ func _on_restart() -> void:
 	queue_redraw()
 
 func _on_undo() -> void:
+	if online_mode:
+		return  # オンライン対戦中はUNDO不可
 	if logic.global_winner != GameLogic.PLAYER_NONE:
 		return
 	logic.undo()
 	queue_redraw()
 
 func _on_back_to_title() -> void:
+	if online_mode:
+		NetworkManager.leave_room()
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 # ============================================================
@@ -122,6 +137,9 @@ func _on_back_to_title() -> void:
 # ============================================================
 func _input(event: InputEvent) -> void:
 	if logic.global_winner != GameLogic.PLAYER_NONE:
+		return
+	# オンライン対戦中は自分のターン以外は入力を無視
+	if online_mode and logic.current_player != my_player:
 		return
 	var pressed := false
 	var pos     := Vector2.ZERO
@@ -140,6 +158,9 @@ func _input(event: InputEvent) -> void:
 		queue_redraw()
 		if logic.global_winner != GameLogic.PLAYER_NONE:
 			_play_win_animation()
+		# オンライン対戦：手をFirestoreに送信
+		if online_mode:
+			NetworkManager.send_move(result[0], result[1], logic)
 
 func _pos_to_board_cell(pos: Vector2):
 	if not board_rect.has_point(pos):
@@ -155,6 +176,19 @@ func _pos_to_board_cell(pos: Vector2):
 	var cy    = clamp(floori(local_rel.y / ninth.y), 0, 2)
 	var cell_idx = cy * 3 + cx
 	return [board_idx, cell_idx]
+
+# ============================================================
+# ネットワーク状態受信
+# ============================================================
+func _on_network_state_updated(data: Dictionary) -> void:
+	var remote_move_count = data.get("move_count", 0)
+	var local_move_count  = logic.move_history.size()
+	# 相手が手を打った場合だけ反映（自分の手は既に反映済み）
+	if remote_move_count > local_move_count:
+		NetworkManager.deserialize_game_state(data, logic)
+		queue_redraw()
+		if logic.global_winner != GameLogic.PLAYER_NONE:
+			_play_win_animation()
 
 # ============================================================
 # 勝利演出
@@ -173,7 +207,6 @@ func _set_win_alpha(v: float) -> void:
 # ============================================================
 # 描画ユーティリティ
 # ============================================================
-## テキストを水平中央に描画するヘルパー
 func _draw_string_centered(text: String, cy: float, fs: int, color: Color) -> void:
 	var vp = get_viewport_rect().size
 	var tw = _default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -275,48 +308,70 @@ func _draw_status() -> void:
 	if _default_font == null or logic.global_winner != GameLogic.PLAYER_NONE:
 		return
 	var fs   = ThemeConfig.STATUS_FONT_SIZE
-	var text = "Player %d's turn" % logic.current_player
-	var cy   = board_rect.position.y * 0.5 + fs * 0.4
-	_draw_string_centered(text, cy, fs, ThemeConfig.UI_FONT_COLOR)
+	var text: String
+	if online_mode:
+		# 自分がどちらか、ターンが来ているかを表示
+		var my_color  = ThemeConfig.P1_COLOR if my_player == GameLogic.PLAYER_ONE else ThemeConfig.P2_COLOR
+		var my_symbol = "●" if my_player == GameLogic.PLAYER_ONE else "■"
+		if logic.current_player == my_player:
+			text = "Your turn  " + my_symbol
+			_draw_string_centered(text, board_rect.position.y * 0.5 + fs * 0.4, fs, my_color)
+		else:
+			text = "Opponent's turn..."
+			_draw_string_centered(text, board_rect.position.y * 0.5 + fs * 0.4, fs, Color(0.6, 0.6, 0.6))
+	else:
+		var color = ThemeConfig.P1_COLOR if logic.current_player == GameLogic.PLAYER_ONE else ThemeConfig.P2_COLOR
+		text = "Player %d's turn" % logic.current_player
+		_draw_string_centered(text, board_rect.position.y * 0.5 + fs * 0.4, fs, color)
 
 func _draw_win_overlay() -> void:
 	if _default_font == null:
 		return
 	var vp = get_viewport_rect().size
 	var a  = _win_alpha
-
-	# 暗転
 	draw_rect(get_viewport_rect(), Color(0, 0, 0, 0.60 * a))
 
 	var winner = logic.global_winner
 	var color: Color
 	var line1: String
 	var line2: String
-	if winner == GameLogic.PLAYER_ONE:
-		color = ThemeConfig.P1_COLOR
-		line1 = "Player 1"
-		line2 = "Wins!"
-	elif winner == GameLogic.PLAYER_TWO:
-		color = ThemeConfig.P2_COLOR
-		line1 = "Player 2"
-		line2 = "Wins!"
+
+	if online_mode:
+		if winner == my_player:
+			color = ThemeConfig.P1_COLOR if my_player == GameLogic.PLAYER_ONE else ThemeConfig.P2_COLOR
+			line1 = "You Win!"
+			line2 = ""
+		elif winner == -1:
+			color = Color(0.7, 0.7, 0.7)
+			line1 = "Draw!"
+			line2 = ""
+		else:
+			color = Color(0.7, 0.3, 0.3)
+			line1 = "You Lose"
+			line2 = ""
 	else:
-		color = Color(0.7, 0.7, 0.7)
-		line1 = "Draw!"
-		line2 = ""
+		if winner == GameLogic.PLAYER_ONE:
+			color = ThemeConfig.P1_COLOR
+			line1 = "Player 1"
+			line2 = "Wins!"
+		elif winner == GameLogic.PLAYER_TWO:
+			color = ThemeConfig.P2_COLOR
+			line1 = "Player 2"
+			line2 = "Wins!"
+		else:
+			color = Color(0.7, 0.7, 0.7)
+			line1 = "Draw!"
+			line2 = ""
 
 	color.a = a
+	var fs     = int(vp.x * 0.16)
+	var line_h = fs * 1.15
+	var start_y = vp.y * 0.5 - line_h * 0.5 + fs * 0.8
 
-	var fs      = int(vp.x * 0.16)
-	var line_h  = fs * 1.15
-	var total_h = line_h * (2.0 if line2 != "" else 1.0)
-	var start_y = vp.y * 0.5 - total_h * 0.5 + fs * 0.8
-
-	# グロー（影を重ねて擬似グロー）
 	for offset in [5, 3]:
-		var glow   = color
-		glow.a     = a * 0.25
-		var tw1    = _default_font.get_string_size(line1, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var glow = color
+		glow.a   = a * 0.25
+		var tw1  = _default_font.get_string_size(line1, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		draw_string(_default_font, Vector2((vp.x - tw1) * 0.5 + offset, start_y + offset),
 			line1, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, glow)
 		if line2 != "":
@@ -324,14 +379,12 @@ func _draw_win_overlay() -> void:
 			draw_string(_default_font, Vector2((vp.x - tw2) * 0.5 + offset, start_y + line_h + offset),
 				line2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, glow)
 
-	# 本体
 	_draw_string_centered(line1, start_y, fs, color)
 	if line2 != "":
 		_draw_string_centered(line2, start_y + line_h, fs, color)
 
-	# サブテキスト
-	var sub = "Tap RESTART to play again"
-	var sfs = 20
+	var sub       = "Tap RESTART to play again"
+	var sfs       = 20
 	var sub_color = ThemeConfig.UI_FONT_COLOR
 	sub_color.a   = a
 	_draw_string_centered(sub, start_y + line_h * 2.2, sfs, sub_color)
