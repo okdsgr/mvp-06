@@ -2,17 +2,17 @@
 	
 	## Current Sprint: Week 2 - Matchmaking UI
 	
-	### Status: Planning
+	### Status: In Progress
 	
 	---
 	
 	## Tasks
 	
 	### Phase 1: Matchmaking UI Setup
-	- [ ] Create matchmaking scene (res://scenes/matchmaking.tscn)
-	- [ ] Design room list UI with ScrollContainer
-	- [ ] Add "Create Room" button
-	- [ ] Add "Refresh" button
+	- [x] Create matchmaking scene (res://scenes/matchmaking.tscn)
+	- [x] Design room list UI with ScrollContainer
+	- [x] Add "Create Room" button
+	- [x] Add "Refresh" button
 	
 	### Phase 2: Firebase Integration
 	- [ ] Fetch active rooms from Firestore
@@ -32,4 +32,7 @@
 	- Portrait orientation: 480×854
 	- Use theme_config.gd for colors/fonts
 	- NetworkManager handles Firestore operations
+	
+	## Completed Work
+	- 2026-04-14: Phase 1 complete - matchmaking.tscn and matchmaking.gd created with basic UI structure
 	

@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://c0h3oc12c74gq"]
+
+[ext_resource type="Script" uid="uid://36vhce21lyau" path="res://scripts/matchmaking.gd" id="1_script"]
+
+[node name="Matchmaking" type="Control" unique_id=746610093]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="MainContainer" type="VBoxContainer" parent="." unique_id=1090172393]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitleLabel" type="Label" parent="MainContainer" unique_id=1001002252]
+layout_mode = 2
+text = "ROOM LIST"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer" unique_id=673167476]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RoomList" type="VBoxContainer" parent="MainContainer/ScrollContainer" unique_id=835616038]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ButtonContainer" type="HBoxContainer" parent="MainContainer" unique_id=795311479]
+layout_mode = 2
+alignment = 1
+
+[node name="CreateRoomButton" type="Button" parent="MainContainer/ButtonContainer" unique_id=476721801]
+layout_mode = 2
+text = "Create Room"
+
+[node name="RefreshButton" type="Button" parent="MainContainer/ButtonContainer" unique_id=1778646538]
+layout_mode = 2
+text = "Refresh"
