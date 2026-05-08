@@ -15,6 +15,12 @@ run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
+[autoload]
+
+FirebaseManager="res://scripts/firebase_manager.gd"
+NetworkManager="res://scripts/network_manager.gd"
+RatingManager="res://scripts/rating_manager.gd"
+
 [display]
 
 window/size/viewport_width=480
