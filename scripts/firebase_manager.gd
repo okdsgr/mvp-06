@@ -17,21 +17,32 @@ var local_id: String = ""
 # 匿名認証
 # ============================================================
 func sign_in_anonymous() -> void:
-	var url = FirebaseConfig.AUTH_URL + ":signUp?key=" + FirebaseConfig.API_KEY
+	var url  = FirebaseConfig.AUTH_URL + ":signUp?key=" + FirebaseConfig.API_KEY
 	var body = JSON.stringify({"returnSecureToken": true})
 	var headers = ["Content-Type: application/json"]
 	var req = HTTPRequest.new()
 	add_child(req)
 	req.request_completed.connect(_on_auth_completed.bind(req))
-	req.request(url, headers, HTTPClient.METHOD_POST, body)
+	var err = req.request(url, headers, HTTPClient.METHOD_POST, body)
+	if err != OK:
+		auth_failed.emit("HTTPRequest error: %d" % err)
 
 func _on_auth_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
 	req.queue_free()
+	var body_str = body.get_string_from_utf8()
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		auth_failed.emit("Auth HTTP error: %d" % code)
+		# Firebase のエラー詳細を出力
+		print("Auth failed. code=%d body=%s" % [code, body_str])
+		var json = JSON.new()
+		if json.parse(body_str) == OK:
+			var err_data  = json.get_data()
+			var err_msg   = err_data.get("error", {}).get("message", "unknown")
+			auth_failed.emit("Auth error %d: %s" % [code, err_msg])
+		else:
+			auth_failed.emit("Auth HTTP error: %d" % code)
 		return
 	var json = JSON.new()
-	if json.parse(body.get_string_from_utf8()) != OK:
+	if json.parse(body_str) != OK:
 		auth_failed.emit("Auth JSON parse error")
 		return
 	var data = json.get_data()
@@ -40,6 +51,7 @@ func _on_auth_completed(result: int, code: int, _headers: PackedStringArray, bod
 	if id_token == "":
 		auth_failed.emit("No idToken in response")
 		return
+	print("Auth OK uid=", local_id)
 	auth_completed.emit(local_id)
 
 # ============================================================
@@ -56,6 +68,7 @@ func read_document(path: String) -> void:
 func _on_read_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
 	req.queue_free()
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		print("Read error code=%d body=%s" % [code, body.get_string_from_utf8()])
 		firestore_error.emit("Read error: %d" % code)
 		return
 	var json = JSON.new()
@@ -76,9 +89,10 @@ func write_document(path: String, data: Dictionary) -> void:
 	req.request_completed.connect(_on_write_completed.bind(req))
 	req.request(url, headers, HTTPClient.METHOD_PATCH, body)
 
-func _on_write_completed(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray, req: HTTPRequest) -> void:
+func _on_write_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, req: HTTPRequest) -> void:
 	req.queue_free()
 	if result != HTTPRequest.RESULT_SUCCESS or code < 200 or code >= 300:
+		print("Write error code=%d body=%s" % [code, body.get_string_from_utf8()])
 		firestore_error.emit("Write error: %d" % code)
 		return
 	firestore_write_completed.emit()

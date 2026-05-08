@@ -17,9 +17,9 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-FirebaseManager="res://scripts/firebase_manager.gd"
-NetworkManager="res://scripts/network_manager.gd"
-RatingManager="res://scripts/rating_manager.gd"
+FirebaseManager="*res://scripts/firebase_manager.gd"
+NetworkManager="*res://scripts/network_manager.gd"
+RatingManager="*res://scripts/rating_manager.gd"
 
 [display]
 

@@ -9,9 +9,6 @@ func _ready() -> void:
 	_default_font = ThemeDB.fallback_font
 	RenderingServer.set_default_clear_color(ThemeConfig.BG_COLOR)
 	_setup_ui()
-	# バックグラウンドで匿名認証を開始
-	if FirebaseManager.id_token == "":
-		FirebaseManager.sign_in_anonymous()
 
 func _setup_ui() -> void:
 	var canvas = CanvasLayer.new()
@@ -77,7 +74,7 @@ func _draw() -> void:
 	for c in chars:
 		total_w += _default_font.get_string_size(c, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var start_x = (vp.x - total_w) * 0.5
-	var title_y  = vp.y * 0.28
+	var title_y = vp.y * 0.28
 	var x = start_x
 	for i in range(chars.size()):
 		var c = chars[i]

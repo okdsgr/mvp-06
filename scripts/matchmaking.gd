@@ -3,13 +3,11 @@
 
 extends Control
 
-# --- UIノード参照 ---
-@onready var title_label:       Label         = $MainContainer/TitleLabel
-@onready var room_list:         VBoxContainer = $MainContainer/ScrollContainer/RoomList
-@onready var create_room_btn:   Button        = $MainContainer/ButtonContainer/CreateRoomButton
-@onready var refresh_btn:       Button        = $MainContainer/ButtonContainer/RefreshButton
+@onready var title_label:     Label         = $MainContainer/TitleLabel
+@onready var room_list:       VBoxContainer = $MainContainer/ScrollContainer/RoomList
+@onready var create_room_btn: Button        = $MainContainer/ButtonContainer/CreateRoomButton
+@onready var refresh_btn:     Button        = $MainContainer/ButtonContainer/RefreshButton
 
-# --- 状態 ---
 var _room_code_dialog: Window = null
 
 func _ready() -> void:
@@ -19,15 +17,18 @@ func _ready() -> void:
 	NetworkManager.match_failed.connect(_on_match_failed)
 	_apply_theme()
 	_build_ui()
-	# 認証してからルーム一覧を取得
 	if FirebaseManager.id_token == "":
 		FirebaseManager.auth_completed.connect(_on_auth_done, CONNECT_ONE_SHOT)
+		FirebaseManager.auth_failed.connect(_on_auth_error, CONNECT_ONE_SHOT)
 		FirebaseManager.sign_in_anonymous()
 	else:
 		_refresh_ui()
 
 func _on_auth_done(_uid: String) -> void:
 	_refresh_ui()
+
+func _on_auth_error(error: String) -> void:
+	_show_status("Auth failed: " + error)
 
 func _apply_theme() -> void:
 	title_label.add_theme_font_size_override("font_size", 28)
@@ -37,13 +38,23 @@ func _apply_theme() -> void:
 # UI構築
 # ============================================================
 func _build_ui() -> void:
-	# ランダムマッチボタンを追加
+	# TITLEボタン（左上）
+	var canvas = CanvasLayer.new()
+	add_child(canvas)
+	var title_btn = _make_button("TITLE", Color(0.5, 0.5, 0.55))
+	title_btn.custom_minimum_size = Vector2(100, 44)
+	title_btn.position = Vector2(16, 16)
+	title_btn.pressed.connect(_on_back_to_title)
+	canvas.add_child(title_btn)
+
+	# ランダムマッチボタン
 	var random_btn = _make_button("RANDOM MATCH", ThemeConfig.P1_COLOR)
 	random_btn.pressed.connect(_on_random_match_pressed)
 	$MainContainer/ButtonContainer.add_child(random_btn)
 
-	# ルームコード入力エリアを追加
+	# ルームコード入力エリア
 	var code_container = HBoxContainer.new()
+	code_container.name      = "CodeContainer"
 	code_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	code_container.add_theme_constant_override("separation", 12)
 	$MainContainer.add_child(code_container)
@@ -83,6 +94,10 @@ func _make_button(label: String, color: Color) -> Button:
 # ============================================================
 # ボタンコールバック
 # ============================================================
+func _on_back_to_title() -> void:
+	NetworkManager.leave_room()
+	get_tree().change_scene_to_file("res://scenes/title.tscn")
+
 func _on_create_room_pressed() -> void:
 	var rating  = RatingManager.my_profile.get("rating", 1000)
 	var room_id = NetworkManager.create_room_with_code(rating)
@@ -94,15 +109,13 @@ func _on_random_match_pressed() -> void:
 	_show_status("Searching for opponent...")
 
 func _on_join_pressed() -> void:
-	var code_input = get_node_or_null("MainContainer/CodeInput")
-	if code_input == null:
-		# HBoxContainerの中を探す
-		for child in $MainContainer.get_children():
-			if child is HBoxContainer:
-				for sub in child.get_children():
-					if sub is LineEdit:
-						code_input = sub
-						break
+	var code_input: LineEdit = null
+	var cc = get_node_or_null("MainContainer/CodeContainer")
+	if cc:
+		for child in cc.get_children():
+			if child is LineEdit:
+				code_input = child
+				break
 	if code_input == null or code_input.text.strip_edges() == "":
 		_show_status("Please enter a room code")
 		return
@@ -131,10 +144,9 @@ func _show_waiting_dialog(room_code: String) -> void:
 	if _room_code_dialog:
 		_room_code_dialog.queue_free()
 	var dialog = Window.new()
-	dialog.title            = "Waiting for opponent"
-	dialog.size             = Vector2i(320, 200)
-	dialog.position         = Vector2i(80, 320)
-	dialog.unresizable      = true
+	dialog.title       = "Waiting for opponent"
+	dialog.size        = Vector2i(320, 220)
+	dialog.unresizable = true
 	dialog.close_requested.connect(func():
 		NetworkManager.leave_room()
 		dialog.queue_free())
@@ -172,7 +184,6 @@ func _show_waiting_dialog(room_code: String) -> void:
 # ステータス表示
 # ============================================================
 func _show_status(msg: String) -> void:
-	# room_listの先頭に一時表示
 	for child in room_list.get_children():
 		child.queue_free()
 	var lbl = Label.new()
