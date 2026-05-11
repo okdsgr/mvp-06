@@ -1,3 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Firebase config (contains API key - do not commit)
+scripts/firebase_config.gd
+scripts/firebase_config.gd.uid
